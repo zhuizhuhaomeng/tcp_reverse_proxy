@@ -145,9 +145,6 @@ int sendAll(int fd, char *buf, int n)
     while (1) {
         ret = write(fd, buf + m, n - m);
         if (ret <= 0) {
-            if (ret == 0) {
-                return -1;
-            }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 FD_ZERO(&writefds);
                 FD_ZERO(&exceptfds);
