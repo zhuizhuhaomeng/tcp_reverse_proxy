@@ -91,6 +91,14 @@ void SetNoblock(int fd)
     }
 }
 
+void EnableReuseAddr(int fd)
+{
+    int enable = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
+        SLOG("setsockopt(SO_REUSEADDR) failed");
+    }
+}
+
 int listen_server(const char *host, int port)
 {
     struct sockaddr_in serv_addr;
@@ -99,10 +107,7 @@ int listen_server(const char *host, int port)
         SLOG("connect server %s:%d failed", host, port);
         return fd;
     }
-    int enable = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
-        SLOG("setsockopt(SO_REUSEADDR) failed");
-    }
+    EnableReuseAddr(fd);
 
     memset(&serv_addr, '0', sizeof(serv_addr));
 
@@ -130,18 +135,30 @@ int listen_server(const char *host, int port)
     return fd;
 }
 
+
 int sendAll(int fd, char *buf, int n)
 {
     int ret;
+    fd_set writefds, exceptfds;
+
     int m = 0;
     while (1) {
         ret = write(fd, buf + m, n - m);
         if (ret <= 0) {
-            if (ret == EAGAIN || ret == EWOULDBLOCK) {
-                usleep(1000);
+            if (ret == 0) {
+                return -1;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                FD_ZERO(&writefds);
+                FD_ZERO(&exceptfds);
+
+                FD_SET(fd, &writefds);
+                FD_SET(fd, &exceptfds);
+                ret = select(fd + 1, NULL, &writefds, &exceptfds, NULL);
             } else {
                 return -1;
             }
+            continue;
         }
         m += ret;
         if (m == n) {
@@ -167,6 +184,7 @@ void child_process(int client_fd)
     if (server_fd < 0) {
         goto endprocess;
     }
+    EnableReuseAddr(server_fd);
     SLOG("sproxy server accept server fd %d", client_fd);
     SetNoblock(client_fd);
     SetNoblock(server_fd);
@@ -193,7 +211,7 @@ void child_process(int client_fd)
 
         if (ready <= 0) {
             SLOG("select read event failed");
-            break;
+            continue;
         }
 
         if (FD_ISSET(client_fd, &exceptfds)) {
@@ -320,10 +338,13 @@ int main(int argc, char *argv[])
         if (client_fd == -1) {
             continue;
         }
+        EnableReuseAddr(client_fd);
         forked_pid = fork();
         if (forked_pid == 0) {
             child_process(client_fd);
             exit(0);
+        } else {
+            close(client_fd);
         }
     }
 

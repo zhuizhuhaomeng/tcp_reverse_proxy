@@ -117,15 +117,26 @@ int connect_server(const char *host, int port)
 int sendAll(int fd, char *buf, int n)
 {
     int ret;
+    fd_set writefds, exceptfds;
+
     int m = 0;
     while (1) {
         ret = write(fd, buf + m, n - m);
         if (ret <= 0) {
-            if (ret == EAGAIN || ret == EWOULDBLOCK) {
-                usleep(1000);
+            if (ret == 0) {
+                return -1;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                FD_ZERO(&writefds);
+                FD_ZERO(&exceptfds);
+
+                FD_SET(fd, &writefds);
+                FD_SET(fd, &exceptfds);
+                ret = select(fd + 1, NULL, &writefds, &exceptfds, NULL);
             } else {
                 return -1;
             }
+            continue;
         }
         m += ret;
         if (m == n) {
