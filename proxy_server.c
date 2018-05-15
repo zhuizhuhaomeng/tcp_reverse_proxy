@@ -22,6 +22,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -64,6 +65,21 @@ typedef struct {
 ProxyServer ps = { "127.0.0.1", 7777, "127.0.0.1", 8888, 1, 0, 0 };
 int accept_server_fd;
 int accept_client_fd;
+
+void
+SetKeepalive(int sock, uint32_t idle, uint32_t interval, uint32_t count)
+{   
+    int keepalive = 1;          // 开启keepalive属性
+    int keepidle = idle > 0 ? idle : 60;        // 如该连接在60秒内没有任何数据往来,则进行探测
+    int keep_interval = interval > 0 ? interval : 5;    // 探测时发包的时间间隔为5 秒
+    int keep_count = count > 0 ? count : 3;     // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
+    
+    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &keepalive, sizeof(keepalive));
+    setsockopt(sock, SOL_TCP, TCP_KEEPIDLE, (void *) &keepidle, sizeof(keepidle));
+    setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, (void *) &keep_interval, sizeof(keep_interval));
+    setsockopt(sock, SOL_TCP, TCP_KEEPCNT, (void *) &keep_count, sizeof(keep_count));
+}
+
 
 void signal_handle(int sig)
 {
@@ -182,6 +198,7 @@ void child_process(int client_fd)
         goto endprocess;
     }
     EnableReuseAddr(server_fd);
+    SetKeepalive(server_fd, 60, 5, 3);
     SLOG("sproxy server accept server fd %d", client_fd);
     SetNoblock(client_fd);
     SetNoblock(server_fd);
@@ -331,10 +348,12 @@ int main(int argc, char *argv[])
     }
     while (1) {
         int client_fd = accept(accept_client_fd, (struct sockaddr *)&client_addr, &addr_len);
+            
         SLOG("sproxy server accept client fd %d", client_fd);
         if (client_fd == -1) {
             continue;
         }
+        SetKeepalive(client_fd, 60, 5, 3);
         EnableReuseAddr(client_fd);
         forked_pid = fork();
         if (forked_pid == 0) {

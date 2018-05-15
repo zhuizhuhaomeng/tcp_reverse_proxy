@@ -24,6 +24,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -64,7 +65,22 @@ typedef struct {
     pid_t master_pid;
 } ProxyServer;
 
-ProxyServer ps = { "127.0.0.1", 7777, "127.0.0.1", 6379, 1, 10, 0, 0 };
+ProxyServer ps = { "127.0.0.1", 8888, "127.0.0.1", 9999, 1, 10, 0, 0 };
+
+
+void
+SetKeepalive(int sock, uint32_t idle, uint32_t interval, uint32_t count)
+{
+    int keepalive = 1;          // 开启keepalive属性
+    int keepidle = idle > 0 ? idle : 60;        // 如该连接在60秒内没有任何数据往来,则进行探测
+    int keep_interval = interval > 0 ? interval : 5;    // 探测时发包的时间间隔为5 秒
+    int keep_count = count > 0 ? count : 3;     // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
+
+    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &keepalive, sizeof(keepalive));
+    setsockopt(sock, SOL_TCP, TCP_KEEPIDLE, (void *) &keepidle, sizeof(keepidle));
+    setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, (void *) &keep_interval, sizeof(keep_interval));
+    setsockopt(sock, SOL_TCP, TCP_KEEPCNT, (void *) &keep_count, sizeof(keep_count));
+}
 
 void signal_handle(int sig)
 {
@@ -76,7 +92,7 @@ void signal_handle(int sig)
 
 void show_usage(const char *name)
 {
-    fprintf(stderr, "Usage like %s -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10 -d\n", name);
+    fprintf(stderr, "Usage like %s -s 127.0.0.1:8888 -t 127.0.0.1:9999 -c 10 -d\n", name);
 }
 
 int connect_server(const char *host, int port)
@@ -108,6 +124,7 @@ int connect_server(const char *host, int port)
         close(cfd);
         return -1;
     }
+    SetKeepalive(cfd, 60, 5, 3); 
 
     SLOG("connect server %s:%d success", host, port);
 
