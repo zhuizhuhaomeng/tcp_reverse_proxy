@@ -5,7 +5,7 @@
  * Usage
  *
  * make
- * ./sproxy_agent -s 127.0.0.1:8888 -t 127.0.0.1:22 -c 10
+ * ./proxy_agent -s 127.0.0.1:8888 -t 127.0.0.1:22 -c 10
  *
  */
 
@@ -76,10 +76,10 @@ SetKeepalive(int sock, uint32_t idle, uint32_t interval, uint32_t count)
     int keep_interval = interval > 0 ? interval : 5;    // 探测时发包的时间间隔为5 秒
     int keep_count = count > 0 ? count : 3;     // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
 
-    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &keepalive, sizeof(keepalive));
-    setsockopt(sock, SOL_TCP, TCP_KEEPIDLE, (void *) &keepidle, sizeof(keepidle));
-    setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, (void *) &keep_interval, sizeof(keep_interval));
-    setsockopt(sock, SOL_TCP, TCP_KEEPCNT, (void *) &keep_count, sizeof(keep_count));
+    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
+    setsockopt(sock, SOL_TCP, TCP_KEEPIDLE, (void *)&keepidle, sizeof(keepidle));
+    setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, (void *)&keep_interval, sizeof(keep_interval));
+    setsockopt(sock, SOL_TCP, TCP_KEEPCNT, (void *)&keep_count, sizeof(keep_count));
 }
 
 void signal_handle(int sig)
@@ -124,7 +124,7 @@ int connect_server(const char *host, int port)
         close(cfd);
         return -1;
     }
-    SetKeepalive(cfd, 60, 5, 3); 
+    SetKeepalive(cfd, 60, 5, 3);
 
     SLOG("connect server %s:%d success", host, port);
 
